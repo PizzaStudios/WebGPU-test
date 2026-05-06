@@ -1,0 +1,31 @@
+{
+  "name": "npm-test",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "start": "npm run install-missing-dependencies && npm run build && npm run serve",
+    "install-missing-dependencies": "npm i",
+    "build": "webpack --config webpack.config.js",
+    "serve": "live-server --cors"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@types/node": "^25.6.0",
+    "@webgpu/types": "^0.1.69",
+    "gl-matrix": "*",
+    "jquery": "*",
+    "live-server": "*",
+    "node": "*",
+    "ts-loader": "*",
+    "ts-shader-loader": "*",
+    "typescript": "*",
+    "webpack": "*",
+    "webpack-cli": "*"
+  },
+  "devDependencies": {
+    "@types/jquery": "*"
+  }
+}
