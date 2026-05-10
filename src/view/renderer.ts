@@ -1,10 +1,12 @@
 import shader from "./shaders/shaders.wgsl";
 import { TriangleMesh } from "./triangle_mesh";
+import { QuadMesh } from "./quad_mesh";
 import { mat4 } from "gl-matrix";
 import { Material } from "./material";
-import { Camera } from "../model/camera";
-import { Triangle } from "../model/triangle";
 
+import { object_types, RenderData } from "../model/definitions";
+
+import { material } from "../imgs/imgs";
 export class Renderer {
 
     canvas: HTMLCanvasElement;
@@ -17,7 +19,8 @@ export class Renderer {
 
     // Pipeline objects
     uniformBuffer: GPUBuffer;
-    bindGroup: GPUBindGroup;
+    triangleBindGroup: GPUBindGroup;
+    quadBindGroup: GPUBindGroup;
     pipeline: GPURenderPipeline;
 
     // Depth Stencil stuff
@@ -28,7 +31,10 @@ export class Renderer {
 
     // Assets
     triangleMesh: TriangleMesh;
-    material: Material;
+    quadMesh: QuadMesh;
+    triangleMaterial: Material;
+    quadMaterial: Material;
+    
     objectBuffer: GPUBuffer;
 
 
@@ -141,7 +147,7 @@ export class Renderer {
 
         });
     
-        this.bindGroup = this.device.createBindGroup({
+        this.triangleBindGroup = this.device.createBindGroup({
             layout: bindGroupLayout,
             entries: [
                 {
@@ -152,11 +158,36 @@ export class Renderer {
                 },
                 {
                     binding: 1,
-                    resource: this.material.view
+                    resource: this.triangleMaterial.view
                 },
                 {
                     binding: 2,
-                    resource: this.material.sampler
+                    resource: this.triangleMaterial.sampler
+                },
+                {
+                    binding: 3,
+                    resource: {
+                        buffer: this.objectBuffer,
+                    }
+                }
+            ]
+        });
+        this.quadBindGroup = this.device.createBindGroup({
+            layout: bindGroupLayout,
+            entries: [
+                {
+                    binding: 0,
+                    resource: {
+                        buffer: this.uniformBuffer
+                    }
+                },
+                {
+                    binding: 1,
+                    resource: this.quadMaterial.view
+                },
+                {
+                    binding: 2,
+                    resource: this.quadMaterial.sampler
                 },
                 {
                     binding: 3,
@@ -202,7 +233,9 @@ export class Renderer {
 
     async createAssets() {
         this.triangleMesh = new TriangleMesh(this.device);
-        this.material = new Material();
+        this.quadMesh = new QuadMesh(this.device);
+        this.triangleMaterial = new Material();
+        this.quadMaterial = new Material();
 
         const modelBufferDescriptor: GPUBufferDescriptor = {
             size: 64 * 1024,
@@ -210,20 +243,21 @@ export class Renderer {
         };
         this.objectBuffer = this.device.createBuffer(modelBufferDescriptor);
 
-        await this.material.initialize(this.device, "data:image/jpeg;base64,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");
+        await this.triangleMaterial.initialize(this.device, material.pepeTheFrog);
+        await this.quadMaterial.initialize(this.device, material.floor);
     }
 
-    async render(camera: Camera, triangles: Float32Array, triangle_count: number) {
+    async render(renderables: RenderData) {
         
 
         //make transforms
         const projection = mat4.create();
         mat4.perspective(projection, Math.PI/4, 800/600, 0.1, 100);
 
-        const view = camera.get_view();
+        const view = renderables.view_transform;
 
         this.device.queue.writeBuffer(this.objectBuffer as GPUBuffer, 0,
-            triangles, 0, triangles.length);
+            renderables.model_transforms as Float32Array, 0, renderables.model_transforms.length);
         this.device.queue.writeBuffer(this.uniformBuffer as GPUBuffer, 0, view as Float32Array); 
         this.device.queue.writeBuffer(this.uniformBuffer as GPUBuffer, 64, projection as Float32Array); 
         
@@ -242,10 +276,16 @@ export class Renderer {
             depthStencilAttachment: this.depthStencilAttachment,
         });
         
+        let objects_drawn: number = 0;
         renderpass.setPipeline(this.pipeline);
         renderpass.setVertexBuffer(0, this.triangleMesh.buffer);
-        renderpass.setBindGroup(0, this.bindGroup); 
-        renderpass.draw(3, triangle_count, 0, 0);
+        renderpass.setBindGroup(0, this.triangleBindGroup); 
+        renderpass.draw(3, renderables.object_counts[object_types.TRIANGLE], 0, objects_drawn);
+        objects_drawn += renderables.object_counts[object_types.TRIANGLE]
+        renderpass.setVertexBuffer(0, this.quadMesh.buffer);
+        renderpass.setBindGroup(0, this.quadBindGroup); 
+        renderpass.draw(6, renderables.object_counts[object_types.QUAD], 0, objects_drawn);
+        objects_drawn += renderables.object_counts[object_types.QUAD]
         renderpass.end();
     
         this.device.queue.submit([commandEncoder.finish()]);
